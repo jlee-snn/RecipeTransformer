@@ -1,0 +1,342 @@
+import json
+from bs4 import BeautifulSoup
+import urllib2
+from textblob import TextBlob
+import codecs
+from fractions import Fraction
+
+# Example urls.
+# Refer to bottom of file for running parser.
+# TODO: clean up comments and code
+
+url_example = 'http://allrecipes.com/recipe/worlds-best-lasagna/'   # lasagna recipe for testing
+url_jambalaya ='http://allrecipes.com/recipe/jambalaya/'            # jambalaya recipe for testing
+
+url_kitchen_prep_tools = 'http://en.wikipedia.org/wiki/List_of_food_preparation_utensils'
+url_kitchen_cookware = 'http://en.wikipedia.org/wiki/Cookware_and_bakeware#List_of_cookware_and_bakeware'
+
+#testing purposes only
+html = urllib2.urlopen(url_kitchen_cookware).read()
+soup = BeautifulSoup(html)
+
+########################
+# Pre-process code
+########################
+
+def fetchURL(url):
+    """
+    return html page of passed url.
+    :param url: string of url/address
+    :return soup: html formatted by beautifulsoup
+    """
+    html = urllib2.urlopen(url).read()
+    soup = BeautifulSoup(html)
+    return soup
+
+
+###############
+# Scraping code
+###############
+
+def fetchRecipeName(soup):
+    """
+    return recipe name/title of html soup
+    :param soup: html soup
+    :return name: name of recipe
+    """
+    name = soup.find("h1",{"itemprop":"name"})
+    return name.text
+
+def amountFetch(soup):
+    """
+    scrape and return general amounts for each ingredients.
+    """
+    amt = [link.text for link in soup.find_all("span",{"class":"ingredient-amount"})]
+    return amt
+
+def quantityFetch(soup):
+    """
+    Returns quantity of each ingredient as a float.
+    :param soup: html
+    :return qnum: quantity
+    """
+    qft = [link.text for link in soup.find_all("span",{"class":"ingredient-amount"})]
+    qdata = []
+    qnum=[]
+
+    for integer in range(0,len(qft)):
+        qsplit = "".join(qft[integer]).split(' ')
+        qdata.append(qsplit)
+
+    for integer in range(0,len(qdata)):
+        acc = float(0);
+        x = qdata[integer]
+        for integer in range(0,len(x)):
+
+
+            if(x[integer].isdigit()):
+                new_q=float(sum(Fraction(s) for s in x[integer].split()))
+                acc += new_q
+                #print new_q
+
+            elif("/" in x[integer]):
+                frac_to_float=float(sum(Fraction(s) for s in x[integer].split()))
+                acc += frac_to_float
+                #print frac_to_float
+
+
+        qnum.append(acc)
+    return qnum
+
+def mmUnitFetch(soup):
+    qft = [link.text for link in soup.find_all("span",{"class":"ingredient-amount"})]
+    qdata = []
+    qnum=[]
+
+    for integer in range(0,len(qft)):
+        qsplit = "".join(qft[integer]).split(' ')
+        qdata.append(qsplit)
+
+    for integer in range(0,len(qdata)):
+        acc = float(0);
+        x = qdata[integer]
+        for integer in range(0,len(x)):
+
+
+            if(len(x)==1):
+                qnum.append("none")
+
+            if(x[integer].isdigit()):
+                new_q=float(sum(Fraction(s) for s in x[integer].split()))
+
+                acc += new_q
+
+
+            elif("/" in x[integer]):
+                frac_to_float=float(sum(Fraction(s) for s in x[integer].split()))
+                acc += frac_to_float
+
+            elif("(" in x[integer]):
+                comb1 = "".join(x[integer])
+                comb2 = "".join(x[integer+1])
+                comb3 = "".join(x[integer+2])
+                comb4 = comb1+comb2+comb3
+                qnum.append(comb4)
+
+            elif(")" in x[integer]):
+                None
+
+
+
+            else:
+                qnum.append(x[integer])
+                None
+
+    return qnum
+
+
+def ingredientFetch(soup):
+    """
+    scrape html text that relate to ingredient name
+    """
+    ift = [link.text for link in soup.find_all("span",{"class":"ingredient-name"})]
+    return ift
+
+
+def ratingFetch(soup):
+    """
+    scrape recipe ratings
+    """
+    ratings=soup.find("meta", {"itemprop":"ratingValue"})['content']
+    return ratings
+
+
+def directionFetch(soup):
+    """
+    scrape list of directions/steps
+    returns sentences
+    """
+    list_directions = soup.find("ol").text
+    zen = TextBlob(list_directions)
+    tokenDirection=zen.sentences
+    return tokenDirection
+
+
+def directionString(soup):
+    """scrape and return string of directions
+    """
+    list_directions = soup.find("ol").text
+    zen = "".join(list_directions)
+    tokenDirection = zen.split(".")
+    return tokenDirection
+
+
+# Nutrition Scrape code
+
+def mineCalories(soup):
+    kcal=soup.find("li",{"class":"units"}).text
+    return kcal
+
+
+
+#################
+# Processing code
+#################
+
+def mProcess(soup):
+    """
+    Returns measurement information from list of ingredients.
+    :param soup:
+    :return:
+
+    """
+
+    mdata = ingredientProcess(soup);
+    for integer in range(0,16):
+        print mdata[integer]
+
+    x=mdata[0]
+    mp=x.split("\n")
+    return mp
+
+def ingredientProcess(soup):
+    """
+    Returns list of ingredients scraped from the soup.
+
+    :param soup:
+    :return f_data: list of ingredients
+    """
+    ingredient_data = [link.text for link in soup.find_all("ul",{"class":"ingredient-wrap"})]
+    ingredient_string = "".join(ingredient_data)
+    struct_ingre=ingredient_string.split("\n\n\n")
+    i_data= filter(None,struct_ingre)
+    s_data = "".join(i_data).split("\n\n")
+    f_data =filter(None,s_data)
+
+    return f_data
+
+
+def ingredientProcess(soup):
+    """
+    Returns list of ingredients scraped from the soup.
+
+    :param soup:
+    :return f_data: list of ingredients
+    """
+    ingredient_data = [link.text for link in soup.find_all("ul",{"class":"ingredient-wrap"})]
+    ingredient_string = "".join(ingredient_data)
+    struct_ingre=ingredient_string.split("\n\n\n")
+    i_data= filter(None,struct_ingre)
+    s_data = "".join(i_data).split("\n\n")
+    f_data =filter(None,s_data)
+
+    return f_data
+
+
+def prepareProcess(soup):
+
+    pft = ingredientFetch(soup)
+    result_data = []
+    for integer in range(0,len(pft)):
+        if (',' in pft[integer]):
+
+            x = "".join(pft[integer]).split(',')
+            result_data.append(x[1])
+        else:
+            result_data.append("none")
+    return result_data
+
+def ingredientnameProcess(soup):
+    pft = ingredientFetch(soup)
+    resultdata = []
+
+    for integer in range(0,len(pft)):
+        if (',' in pft[integer]):
+
+            x = "".join(pft[integer]).split(',')
+            resultdata.append(x[0])
+        else:
+            resultdata.append(pft[integer])
+    return resultdata
+
+
+def getDirection(id, soup):
+    """
+    retrieve specific direction via index of list.
+    """
+    stor=[]
+    stor=directionFetch(soup)
+    id = stor[id-1]
+    return id
+
+
+###############
+# Kitchen Tools
+################
+
+def kitchenTools(soup):
+
+    tools = soup.find_all("a",{"title":""})
+
+
+    return tools
+
+
+
+###############
+# Parser code
+###############
+def RecipeParse(url):
+    """
+    Writes a json file containing parsed recipe from html page.
+    :param url: url of recipe, must be an ALLRECIPE.COM url
+    :return void
+    """
+    soup = fetchURL(url)
+    list_format = ["name","quantity","measurement","description","preparation","prep description"]
+
+    n_data = ingredientnameProcess(soup)
+    m_data = mmUnitFetch(soup)
+    p_data = prepareProcess(soup)
+    q_data = quantityFetch(soup)
+
+    out_dict=[]
+    i_dict={}
+    library_dict=[]
+
+    for integer in range(0,len(n_data)):
+        nlist = [n_data[integer],q_data[integer],m_data[integer],"none",p_data[integer],"none"]
+        out_dict.append(nlist)
+
+    for integer in range(0,len(n_data)):
+        library_dict.append(dict(zip(list_format,out_dict[integer])))
+
+
+    outfile = {
+
+        "Info":{
+            "recipe":fetchRecipeName(soup),
+            "rating":ratingFetch(soup),
+        },
+        "ingredients":library_dict,
+        "steps":directionString(soup),
+        "tools":{},
+        "methods":{},
+        "nutrition":{
+        "calories":mineCalories(soup)
+
+        }
+    }
+
+    with codecs.open('recipedata.txt',"w","utf-8") as f:
+        f.write(json.dumps(outfile, indent=4))
+
+    return
+
+
+
+
+# How To Run Code
+# Refer to data.txt for output data
+
+RecipeParse(url_jambalaya)
