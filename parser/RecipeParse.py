@@ -286,11 +286,22 @@ def kitchenTools(soup):
 ###############
 # Parser code
 ###############
-def RecipeParse(url):
+def RecipeParseToJson(url, outpath):
     """
     Writes a json file containing parsed recipe from html page.
     :param url: url of recipe, must be an ALLRECIPE.COM url
     :return void
+    """
+
+    outfile = RecipeParse(url)
+
+    with codecs.open(outpath,"w","utf-8") as f:
+        print "Wrting to ", outpath
+        f.write(json.dumps(outfile, indent=4))
+
+def RecipeParse(url):
+    """
+    Returns python dict of parsed recipe data
     """
     soup = fetchURL(url)
     list_format = ["name","quantity","measurement","description","preparation","prep description"]
@@ -312,7 +323,7 @@ def RecipeParse(url):
         library_dict.append(dict(zip(list_format,out_dict[integer])))
 
 
-    outfile = {
+    parsed_recipe = {
 
         "Info":{
             "recipe":fetchRecipeName(soup),
@@ -328,10 +339,7 @@ def RecipeParse(url):
         }
     }
 
-    with codecs.open('recipedata.txt',"w","utf-8") as f:
-        f.write(json.dumps(outfile, indent=4))
-
-    return
+    return parsed_recipe
 
 
 
@@ -339,4 +347,4 @@ def RecipeParse(url):
 # How To Run Code
 # Refer to data.txt for output data
 
-RecipeParse(url_jambalaya)
+# RecipeParse(url_jambalaya)
