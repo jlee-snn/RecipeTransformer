@@ -28,6 +28,7 @@ for item in data:
     if (item["group"] not in IGNORED_GROUPS) and (len(item["portions"]) != 0):
         food = {}
         food["description"] = item["description"]
+        food["group"] = item["group"]
         food["portions"] = [item["portions"][0]]
         nutrients = [n for n in item["nutrients"] if n["description"] in IMPORTANT_NUTRIENTS and n["units"] in ["g", "mg"]]
         food["nutrients"] = nutrients

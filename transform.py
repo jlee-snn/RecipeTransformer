@@ -1,7 +1,35 @@
 from parser.RecipeParse import RecipeParse
 import json
-from random import randrange
 import math
+from sys import argv
+
+ALL_FOOD_GROUPS = [
+    "Dairy and Egg Products",
+    "Spices and Herbs",
+    "Baby Foods",
+    "Fats and Oils",
+    "Poultry Products",
+    "Soups, Sauces, and Gravies",
+    "Sausages and Luncheon Meats",
+    "Breakfast Cereals",
+    "Fruits and Fruit Juices",
+    "Pork Products",
+    "Vegetables and Vegetable Products",
+    "Nut and Seed Products",
+    "Beef Products",
+    "Beverages",
+    "Finfish and Shellfish Products",
+    "Legumes and Legume Products",
+    "Lamb, Veal, and Game Products",
+    "Baked Products",
+    "Snacks",
+    "Sweets",
+    "Cereal Grains and Pasta",
+    "Fast Foods",
+    "Meals, Entrees, and Sidedishes",
+    "Ethnic Foods",
+    "Restaurant Foods",
+]
 
 NON_VEGETARIAN_GROUPS = [
     "Sausages and Luncheon Meats",
@@ -20,6 +48,14 @@ NON_PESCETARIAN_GROUPS = [
     "Lamb, Veal, and Game Products",
     "Poultry Products",
     "Ethnic Foods"
+]
+
+MEAT_AND_FISH_GROUPS = [
+    "Sausages and Luncheon Meats",
+    "Pork Products",
+    "Beef Products",
+    "Finfish and Shellfish Products",
+    "Lamb, Veal, and Game Products",
 ]
 
 def filter_food_groups(url, groups):
@@ -56,6 +92,56 @@ def to_vegetarian(url):
 def to_pescetarian(url):
     return filter_food_groups(url, NON_PESCETARIAN_GROUPS)
 
+def remove_unhealthy(url, nutrient_name):
+    """
+    Removes ingredient in recipe with highest amounts of specified
+    ingredients, replaces them with similar foods that are healthier
+    """
+
+    with open("processed-food-data.json", "r") as f:
+        "Loading food data...."
+        food_data = json.loads(f.read())
+
+    recipe = RecipeParse(url)
+    subs = {}
+
+    highest_amount = float("-inf")
+    nutrient = {}
+    ingredient_name = ""
+
+    for ingredient in recipe["ingredients"]:
+        nut_info = resolve_ingredient(ingredient["name"], food_data)
+        amnt = get_amount_of_nutrient(nut_info, nutrient_name, "g")
+        if amnt > highest_amount:
+            highest_amount = amnt
+            nutrient = nut_info
+            ingredient_name = ingredient["name"]
+
+    print "Attempting to replace: ", nut_info[u'description']
+    print "Food group ", nut_info['group']
+    print "Nutrient content", highest_amount
+
+    replacement = find_healthier_food(nut_info, nutrient_name, amnt, food_data)
+
+    print "Replacing with:", replacement[u'description']
+    print replacement['group']
+    print "Nutrient Content", get_amount_of_nutrient(replacement, nutrient_name, "g")
+    subs[ingredient_name] = replacement[u'description']
+
+    for ingredient in recipe["ingredients"]:
+        if ingredient["name"] in subs:
+            ingredient["name"] = subs[ingredient["name"]]
+
+    return recipe
+
+def get_amount_of_nutrient(nut_info, nutrient_name, unit):
+    total_nut_amount = [n for n in nut_info["nutrients"]
+            if n["units"] == unit and n["description"] == nutrient_name][0]["value"]
+    return total_nut_amount
+
+def to_lowfat(url):
+    remove_unhealthy(url, u'Total lipid (fat)')
+
 def resolve_ingredient(name, data):
     """
     Takes an ingredient name (as given by our allrecipies parser), and returns a
@@ -87,15 +173,51 @@ def find_similar_food(ingredient, groups, data):
     Takes an ingredient (the whole dict) and a list of banned groups, and finds
     a similar ingredient in the food database
     """
-    best_distance = 2000
+    best_distance = float("inf")
     best_match = {}
     for item in data:
     	if item[u'group'] not in groups:
-    		distance = calculate_distance(ingredient, item)
-    		if distance < best_distance:
-    			best_distance = distance
-    			best_match = item
+            distance = calculate_distance(ingredient, item)
+            if distance < best_distance:
+                    best_distance = distance
+                    best_match = item
     print best_distance
+    return best_match
+
+def find_healthier_food(ingredient, nutrient_name, amount, data, percent_diff_acceptable=0.2):
+    """
+    Finds shortest distance food with less of specified nutrient than original,
+    for most food groups, also ensures we get one in the same group, but treats
+    all meats the same in terms of food groups
+    """
+    best_distance = float("inf")
+    best_match = {}
+
+    if ingredient["group"] in MEAT_AND_FISH_GROUPS:
+        acceptable_groups = MEAT_AND_FISH_GROUPS
+    else:
+        acceptable_groups = [ingredient["group"]]
+
+
+    for item in data:
+        total_nut_amount = get_amount_of_nutrient(item, nutrient_name, "g")
+        percent_difference = total_nut_amount - amount/ float(amount)
+
+        if percent_difference <= percent_diff_acceptable and item["group"] in acceptable_groups:
+            distance = calculate_distance(ingredient, item)
+            if distance < best_distance:
+                best_distance = distance
+                best_match = item
+
+    if len(best_match.keys()) == 0:
+        if percent_diff_acceptable < 0.01:
+            "Giving up, no healthier foods availabe"
+            return ingredient
+        else:
+            print "Could not find better ingredient! Trying again with", percent_diff_acceptable * 0.8
+            return find_healthier_food(ingredient, nutrient_name, amount, data,
+                    percent_diff_acceptable * 0.8)
+
     return best_match
 
 def calculate_distance(ingredient, arg_ingredient):
@@ -106,9 +228,9 @@ def calculate_distance(ingredient, arg_ingredient):
 	distance = 0.0
 	ingredient_nutrients = {}
 	arg_ingredient_nutrients = {}
-	for i in range(0, 5):
+	for i in range(0, 4):
 		ingredient_nutrients[ingredient[u'nutrients'][i][u'description']] = ingredient[u'nutrients'][i][u'value']
-	for i in range(0, 5):
+	for i in range(0, 4):
 		arg_ingredient_nutrients[arg_ingredient[u'nutrients'][i][u'description']] = arg_ingredient[u'nutrients'][i][u'value']
 	for nutrient in ingredient_nutrients.keys():
 		count = 0
@@ -119,8 +241,10 @@ def calculate_distance(ingredient, arg_ingredient):
 	distance = 	float(math.sqrt(distance))
 	return distance
 
+
+
 def pretty_print_dict(dict):
-	print json.dumps(dict, indent = 4)
-	return
-	
-to_vegetarian("http://allrecipes.com/Recipe/Denises-Peanut-Chicken/Detail.aspx?prop24=hn_slide1_Denise%27s-Peanut-Chicken&evt19=1")
+    print json.dumps(dict, indent = 4)
+    return
+
+to_lowfat(argv[1])
