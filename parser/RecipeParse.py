@@ -11,13 +11,12 @@ from fractions import Fraction
 
 url_example = 'http://allrecipes.com/recipe/worlds-best-lasagna/'   # lasagna recipe for testing
 url_jambalaya ='http://allrecipes.com/recipe/jambalaya/'            # jambalaya recipe for testing
-
-url_kitchen_prep_tools = 'http://en.wikipedia.org/wiki/List_of_food_preparation_utensils'
-url_kitchen_cookware = 'http://en.wikipedia.org/wiki/Cookware_and_bakeware#List_of_cookware_and_bakeware'
+url_chicken = 'http://allrecipes.com/Recipe/Shepherds-Pie/Detail.aspx?event8=1&prop24=SR_Thumb&e11=shepherd%20pie&e8=Quick%20Search&event10=1&e7=Recipe&soid=sr_results_p1i2'
 
 #testing purposes only
-html = urllib2.urlopen(url_kitchen_cookware).read()
-soup = BeautifulSoup(html)
+html = urllib2.urlopen(url_chicken).read()
+soup1 = BeautifulSoup(html)
+
 
 ########################
 # Pre-process code
@@ -34,10 +33,14 @@ def fetchURL(url):
     return soup
 
 
+
+
+
+
+
 ###############
 # Scraping code
 ###############
-
 def fetchRecipeName(soup):
     """
     return recipe name/title of html soup
@@ -73,7 +76,6 @@ def quantityFetch(soup):
         x = qdata[integer]
         for integer in range(0,len(x)):
 
-
             if(x[integer].isdigit()):
                 new_q=float(sum(Fraction(s) for s in x[integer].split()))
                 acc += new_q
@@ -84,9 +86,21 @@ def quantityFetch(soup):
                 acc += frac_to_float
                 #print frac_to_float
 
-
         qnum.append(acc)
     return qnum
+
+
+
+def mmUnitFetch2(soup):
+    qft = [link.text for link in soup.find_all("span",{"class":"ingredient-amount"})]
+    qdata = []
+    qnum=[]
+    return qft
+
+
+
+
+
 
 def mmUnitFetch(soup):
     qft = [link.text for link in soup.find_all("span",{"class":"ingredient-amount"})]
@@ -102,15 +116,12 @@ def mmUnitFetch(soup):
         x = qdata[integer]
         for integer in range(0,len(x)):
 
-
             if(len(x)==1):
                 qnum.append("none")
 
             if(x[integer].isdigit()):
                 new_q=float(sum(Fraction(s) for s in x[integer].split()))
-
                 acc += new_q
-
 
             elif("/" in x[integer]):
                 frac_to_float=float(sum(Fraction(s) for s in x[integer].split()))
@@ -124,15 +135,17 @@ def mmUnitFetch(soup):
                 qnum.append(comb4)
 
             elif(")" in x[integer]):
-                None
-
-
-
+                qnum.append("none")
+                
             else:
                 qnum.append(x[integer])
                 None
 
     return qnum
+
+
+
+
 
 
 def ingredientFetch(soup):
@@ -141,6 +154,7 @@ def ingredientFetch(soup):
     """
     ift = [link.text for link in soup.find_all("span",{"class":"ingredient-name"})]
     return ift
+
 
 
 def ratingFetch(soup):
@@ -190,7 +204,6 @@ def mProcess(soup):
     :return:
 
     """
-
     mdata = ingredientProcess(soup);
     for integer in range(0,16):
         print mdata[integer]
@@ -213,24 +226,62 @@ def ingredientProcess(soup):
     s_data = "".join(i_data).split("\n\n")
     f_data =filter(None,s_data)
 
-    return f_data
+
+    for integer in range(0,len(i_data)):
+        if i_data[integer] == "\n":
+            del i_data[integer]
 
 
-def ingredientProcess(soup):
-    """
-    Returns list of ingredients scraped from the soup.
+    return i_data
 
-    :param soup:
-    :return f_data: list of ingredients
-    """
-    ingredient_data = [link.text for link in soup.find_all("ul",{"class":"ingredient-wrap"})]
-    ingredient_string = "".join(ingredient_data)
-    struct_ingre=ingredient_string.split("\n\n\n")
-    i_data= filter(None,struct_ingre)
-    s_data = "".join(i_data).split("\n\n")
-    f_data =filter(None,s_data)
 
-    return f_data
+
+
+
+def ingredientCheck(soup):
+
+    raw_list = []
+    q_list = []
+    unit_list=[]
+    unit_list = mmUnitFetch2(soup)
+    final_list = []
+    raw_list = ingredientProcess(soup)
+    q_list = quantityFetch(soup)
+
+    for integer in range(0,len(raw_list)):
+
+        if num_there(str(raw_list[integer])):
+            None
+        else:
+             q_list.insert(integer,"none")
+             unit_list.insert(integer,"none")
+
+    return q_list
+
+
+def ingredientCheckUnit(soup):
+
+    raw_list = []
+    q_list = []
+    unit_list=[]
+    unit_list = mmUnitFetch2(soup)
+    final_list = []
+    raw_list = ingredientProcess(soup)
+    q_list = quantityFetch(soup)
+
+    for integer in range(0,len(raw_list)):
+        if num_there(str(raw_list[integer])):
+            None
+        else:
+             q_list.insert(integer,"none")
+             unit_list.insert(integer,"none")
+    return unit_list
+    
+
+
+
+def num_there(s):
+    return any(i.isdigit() for i in s)
 
 
 def prepareProcess(soup):
@@ -270,22 +321,11 @@ def getDirection(id, soup):
     return id
 
 
-###############
-# Kitchen Tools
-################
-
-def kitchenTools(soup):
-
-    tools = soup.find_all("a",{"title":""})
-
-
-    return tools
-
-
 
 ###############
 # Parser code
 ###############
+
 def RecipeParseToJson(url, outpath):
     """
     Writes a json file containing parsed recipe from html page.
@@ -296,20 +336,23 @@ def RecipeParseToJson(url, outpath):
     outfile = RecipeParse(url)
 
     with codecs.open(outpath,"w","utf-8") as f:
-        print "Wrting to ", outpath
+        print "Writing to ", outpath
         f.write(json.dumps(outfile, indent=4))
+
 
 def RecipeParse(url):
     """
-    Returns python dict of parsed recipe data
+    Writes a json file containing parsed recipe from html page.
+    :param url: url of recipe, must be an ALLRECIPE.COM url
+    :return void
     """
     soup = fetchURL(url)
-    list_format = ["name","quantity","measurement","description","preparation","prep description"]
+    list_format = ["name","quantity","measurement","descriptor","preparation","prep-description"]
 
     n_data = ingredientnameProcess(soup)
-    m_data = mmUnitFetch(soup)
+    m_data = ingredientCheckUnit(soup)
     p_data = prepareProcess(soup)
-    q_data = quantityFetch(soup)
+    q_data = ingredientCheck(soup)
 
     out_dict=[]
     i_dict={}
@@ -322,20 +365,17 @@ def RecipeParse(url):
     for integer in range(0,len(n_data)):
         library_dict.append(dict(zip(list_format,out_dict[integer])))
 
-
     parsed_recipe = {
-
         "Info":{
             "recipe":fetchRecipeName(soup),
             "rating":ratingFetch(soup),
         },
         "ingredients":library_dict,
         "steps":directionString(soup),
-        "tools":{},
-        "methods":{},
+        #tools":{},
+        #methods":{},
         "nutrition":{
         "calories":mineCalories(soup)
-
         }
     }
 
@@ -343,8 +383,3 @@ def RecipeParse(url):
 
 
 
-
-# How To Run Code
-# Refer to data.txt for output data
-
-# RecipeParse(url_jambalaya)
